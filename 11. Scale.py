@@ -62,46 +62,48 @@ def estimate_loss():
     model.train()
     return out
 
-class Head(nn.Module):
-    """ one head of self-attention """
-
-    def __init__(self, head_size):
-        super().__init__()
-        self.key = nn.Linear(n_embd, head_size, bias=False)
-        self.query = nn.Linear(n_embd, head_size, bias=False)
-        self.value = nn.Linear(n_embd, head_size, bias=False)
-        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) #lower traingle
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x):
-        # input of size (batch, time-step, channels)
-        # output of size (batch, time-step, head size)
-        B,T,C = x.shape
-        k = self.key(x)   # (B,T,hs)
-        q = self.query(x) # (B,T,hs)
-        # compute attention scores ("affinities")
-        #Scaled attention
-        wei = q @ k.transpose(-2,-1) * k.shape[-1]**-0.5 # (B, T, hs) @ (B, hs, T) -> (B, T, T) 
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf')) # (B, T, T)
-        wei = F.softmax(wei, dim=-1) # (B, T, T)
-        wei = self.dropout(wei)
-        # perform the weighted aggregation of the values
-        v = self.value(x) # (B,T,C)
-        out = wei @ v # (B, T, T) @ (B, T, C) -> (B, T, C)
-        return out
-
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
     def __init__(self, num_heads, head_size):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size) for _ in range(num_heads)])
-        self.proj = nn.Linear(head_size * num_heads, n_embd) #projection layer to weighted sum of heads, and this layer can project back to the residual pathway.
+        self.num_heads = num_heads
+        self.head_size = head_size
+        self.key = nn.Linear(n_embd, num_heads * head_size, bias=False)
+        self.query = nn.Linear(n_embd, num_heads * head_size, bias=False)
+        self.value = nn.Linear(n_embd, num_heads * head_size, bias=False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) # lower triangular mask
+        self.proj = nn.Linear(num_heads * head_size, n_embd)  # projection back to n_embd
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.dropout(self.proj(out))
+        B, T, C = x.shape
+
+        # Compute key, query, value for all heads in parallel
+        k = self.key(x)   # (B, T, num_heads * head_size)
+        q = self.query(x) # (B, T, num_heads * head_size)
+        v = self.value(x) # (B, T, num_heads * head_size)
+
+        # Reshape to (B, num_heads, T, head_size) for multi-head attention
+        k = k.view(B, T, self.num_heads, self.head_size).transpose(1, 2) # (B, num_heads, T, head_size)
+        q = q.view(B, T, self.num_heads, self.head_size).transpose(1, 2) # (B, num_heads, T, head_size)
+        v = v.view(B, T, self.num_heads, self.head_size).transpose(1, 2) # (B, num_heads, T, head_size)
+
+        # Scaled dot-product attention
+        wei = q @ k.transpose(-2, -1) * (self.head_size ** -0.5) # (B, num_heads, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # apply mask (B, num_heads, T, T)
+        wei = F.softmax(wei, dim=-1)  # (B, num_heads, T, T)
+        wei = self.dropout(wei)
+
+        # Weighted sum over the values
+        out = wei @ v  # (B, num_heads, T, head_size)
+
+        # Concatenate heads
+        out = out.transpose(1, 2).contiguous().view(B, T, self.num_heads * self.head_size) # (B, T, num_heads * head_size)
+
+        # Final linear projection back to n_embd
+        out = self.proj(out)  # (B, T, n_embd)
+        out = self.dropout(out) # (B, T, n_embd)
         return out
 
 class FeedFoward(nn.Module):
@@ -123,18 +125,22 @@ class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
     def __init__(self, n_embd, n_head):
-        # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size)
         self.ffwd = FeedFoward(n_embd)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
-
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        x = x + self.sa(self.ln1(x)) # x + is the residual connection
-        x = x + self.ffwd(self.ln2(x)) # x + is the residual connection
+        # Self-attention layer with LayerNorm, dropout, and residual connection
+        x_residual = self.ln1(x)
+        x = x + self.dropout(self.sa(x_residual))
+
+        # FeedForward layer with LayerNorm, dropout, and residual connection
+        x_residual = self.ln2(x)
+        x = x + self.dropout(self.ffwd(x_residual))
         return x
 
 # super simple bigram model
