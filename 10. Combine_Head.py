@@ -1,3 +1,4 @@
+import os
 import time
 import torch
 import torch.nn as nn
@@ -231,7 +232,7 @@ for iter in range(max_iters):
     optimizer.step()
 
 # 在训练结束后，保存模型的状态字典
-torch.save(model.state_dict(), '/Users/yanli1122/code/ng-video-lecture/gpt_model.pth')
+torch.save(model.state_dict(), os.path.join(os.getcwd(), 'gpt_model.pth')) # 将模型保存到当前工作目录下
 print("Model saved successfully!")
 
 # generate from the model
