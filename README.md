@@ -48,6 +48,7 @@ Simply follow Andrej Karpathy's YouTube lecture and proceed step by step. Each f
 - `resnet.py`: Introduces residual connections into the architecture.
 - `layernorm.py`: Adds Layer Normalization for stabilizing the training.
 - `dropout.py`: Implements dropout for regularization.
+- `combine_head.py`: combine single and multi-head into one batch dimension.
 - `scale.py`: Scales the output properly to prevent vanishing gradients.
 
 Each file builds on the previous file as per the lecture.
@@ -55,6 +56,10 @@ Each file builds on the previous file as per the lecture.
 ## Features
 - **Time Logging**: The code prints the time cost of each training step.
 - **Checkpointing**: The model automatically saves checkpoints after training, allowing you to resume or test using `test.py` with your trained model (saved as `.pth`).
+- **Multi-Head Dim**: The implementation merges single-head and multi-head classes into a unified batch dimension, enabling parallel processing for improved computational efficiency.
+
+## Computation
+The code implements two GPT models: a small 45,000-parameter version in combine_head.py and a larger 10 million-parameter GPT-2 in scale.py. For reference, training the smaller model took 45 seconds, while the larger one required 3 hours on a MacBook M1 Pro with 16GB of RAM.
 
 ## License
 **Disclaimer**: This repository is for educational purposes only and not for commercial use. All code is based on Andrej Karpathy's YouTube lecture: Let's Build GPT from Scratch.
