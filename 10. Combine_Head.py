@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 # hyperparameters
-batch_size = 32 # how many independent sequences will we process in parallel?
+batch_size = 4 # how many independent sequences will we process in parallel?
 block_size = 8 # what is the maximum context length for predictions?
 max_iters = 5000 #increase max iters because we learning rate is lower 
 eval_interval = 300
@@ -107,7 +107,6 @@ class MultiHeadAttention(nn.Module):
         out = self.dropout(out) # (B, T, n_embd)
         return out
 
-
 class FeedFoward(nn.Module):
     """ a simple linear layer followed by a non-linearity """
 
@@ -145,9 +144,8 @@ class Block(nn.Module):
         x = x + self.dropout(self.ffwd(x_residual))
         return x
 
-
 # super simple bigram model
-class BigramLanguageModel(nn.Module):
+class MyGPTModel(nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -196,7 +194,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-model = BigramLanguageModel()
+model = MyGPTModel()
 m = model.to(device)
 # print the number of parameters in the model
 print("Number of parameters:")
