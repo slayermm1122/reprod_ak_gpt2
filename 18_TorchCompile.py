@@ -167,7 +167,8 @@ train_loader = SimpleDataLoader(B=4, T=1024) #还原 GPT2，根据GPU显存大�
 torch.set_float32_matmul_precision('high')
 model = GPT(GPTConfig())
 model.to(device)
-model = torch.compile(model)
+#model = torch.compile(model)
+model = torch.compile(model, backend="aot_eager")
 
 #训练
 optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
